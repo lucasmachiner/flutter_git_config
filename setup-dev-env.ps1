@@ -1,6 +1,22 @@
 #requires -version 5.1
 
 $ErrorActionPreference = "Stop"
+$DebugEnabled = $false
+
+function Write-DebugLog {
+    param([string]$Message)
+    if ($DebugEnabled) {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        Write-Host "[DEBUG $timestamp] $Message" -ForegroundColor DarkGray
+    }
+}
+
+function Update-ProcessPath {
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$machinePath;$userPath"
+    Write-DebugLog "Process PATH refreshed from registry."
+}
 
 function Test-Admin {
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -14,28 +30,50 @@ function Test-Command {
 }
 
 if (-not (Test-Admin)) {
+    Write-DebugLog "Administrator check failed. Exiting."
     Write-Warning "Este script precisa ser executado como Administrador."
     Write-Host "Clique com o botao direito no PowerShell e selecione 'Executar como administrador'."
     exit 1
 }
 
 Write-Host "Iniciando a configuracao do Git e Flutter..." -ForegroundColor Cyan
+Write-DebugLog "Script start."
 
 # --- Git ---
 $gitInstalled = Test-Command "git"
+Write-DebugLog "Git detected: $gitInstalled"
 if ($gitInstalled) {
     $gitVersion = git --version
+    Write-DebugLog "git --version output: $gitVersion; exitCode=$LASTEXITCODE; success=$?"
     Write-Host "Git ja instalado: $gitVersion" -ForegroundColor Green
 } else {
     if (-not (Test-Command "winget")) {
-        Write-Warning "winget nao esta disponivel. Instale o Git manualmente ou instale o App Installer."
+        Write-DebugLog "winget not found. Exiting."
+        Write-Warning "winget nao esta disponivel. Instale o Git manualmente atraves deste link https://git-scm.com/download/win ou instale o App Installer."
         exit 1
     }
 
     Write-Host "Instalando o Git via winget..." -ForegroundColor Yellow
     winget install --id Git.Git -e --source winget
+    Write-DebugLog "winget install finished; exitCode=$LASTEXITCODE; success=$?"
+
+    Update-ProcessPath
+
+    $gitCmdPath = @(
+        "C:\Program Files\Git\cmd\git.exe",
+        "C:\Program Files (x86)\Git\cmd\git.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+    if ($gitCmdPath) {
+        $gitCmdDir = Split-Path $gitCmdPath -Parent
+        if ($env:Path -notlike "*$gitCmdDir*") {
+            $env:Path = "$env:Path;$gitCmdDir"
+            Write-DebugLog "Added Git cmd dir to process PATH: $gitCmdDir"
+        }
+    }
 
     if (-not (Test-Command "git")) {
+        Write-DebugLog "Git still not found after install. Exiting."
         Write-Warning "A instalacao do Git nao foi concluida como esperado."
         exit 1
     }
@@ -44,18 +82,24 @@ if ($gitInstalled) {
 # Configure Git if needed
 $gitUserName = git config --global user.name
 $gitUserEmail = git config --global user.email
+Write-DebugLog "git user.name: '$gitUserName'"
+Write-DebugLog "git user.email: '$gitUserEmail'"
 
 if ([string]::IsNullOrWhiteSpace($gitUserName)) {
     $gitUserName = Read-Host "Digite seu nome de usuario do Git"
+    Write-DebugLog "Read git user.name input: '$gitUserName'"
     if (-not [string]::IsNullOrWhiteSpace($gitUserName)) {
         git config --global user.name "$gitUserName"
+        Write-DebugLog "Set git user.name; exitCode=$LASTEXITCODE; success=$?"
     }
 }
 
 if ([string]::IsNullOrWhiteSpace($gitUserEmail)) {
     $gitUserEmail = Read-Host "Digite seu email do Git"
+    Write-DebugLog "Read git user.email input: '$gitUserEmail'"
     if (-not [string]::IsNullOrWhiteSpace($gitUserEmail)) {
         git config --global user.email "$gitUserEmail"
+        Write-DebugLog "Set git user.email; exitCode=$LASTEXITCODE; success=$?"
     }
 }
 
@@ -66,6 +110,9 @@ $flutterCmd = Get-Command flutter -ErrorAction SilentlyContinue
 $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 $flutterInPath = ($machinePath -like "*flutter\bin*") -or ($userPath -like "*flutter\bin*")
+Write-DebugLog "flutter command found: $([bool]$flutterCmd)"
+Write-DebugLog "flutter bin in machine PATH: $($machinePath -like "*flutter\\bin*")"
+Write-DebugLog "flutter bin in user PATH: $($userPath -like "*flutter\\bin*")"
 
 if ($flutterCmd -or $flutterInPath) {
     Write-Host "Flutter ja instalado." -ForegroundColor Green
@@ -73,16 +120,19 @@ if ($flutterCmd -or $flutterInPath) {
     $developPath = Join-Path $env:USERPROFILE "develop"
     if (-not (Test-Path $developPath)) {
         New-Item -ItemType Directory -Path $developPath | Out-Null
+        Write-DebugLog "Created develop directory: $developPath"
         Write-Host "Pasta criada: $developPath" -ForegroundColor Green
     }
 
     $flutterDir = Join-Path $developPath "flutter"
     if (Test-Path $flutterDir) {
+        Write-DebugLog "Flutter directory exists: $flutterDir"
         Write-Host "A pasta do Flutter ja existe: $flutterDir" -ForegroundColor Yellow
     } else {
         Write-Host "Clonando o Flutter... isso pode levar alguns minutos." -ForegroundColor Yellow
         Push-Location $developPath
         git clone https://github.com/flutter/flutter.git
+        Write-DebugLog "git clone finished; exitCode=$LASTEXITCODE; success=$?"
         Pop-Location
     }
 
@@ -90,8 +140,10 @@ if ($flutterCmd -or $flutterInPath) {
     if ($machinePath -notlike "*$flutterBinPath*") {
         $newPath = "$machinePath;$flutterBinPath"
         [Environment]::SetEnvironmentVariable("Path", $newPath, "Machine")
+        Write-DebugLog "Updated machine PATH with: $flutterBinPath"
         Write-Host "Flutter adicionado ao PATH do sistema." -ForegroundColor Green
     } else {
+        Write-DebugLog "Machine PATH already contains: $flutterBinPath"
         Write-Host "Flutter ja esta no PATH do sistema." -ForegroundColor Green
     }
 }
@@ -100,6 +152,7 @@ if ($flutterCmd -or $flutterInPath) {
 $gitVersionFinal = ""
 if (Test-Command "git") {
     $gitVersionFinal = git --version
+    Write-DebugLog "Final git --version: $gitVersionFinal; exitCode=$LASTEXITCODE; success=$?"
 }
 
 $flutterBinPathFinal = ""
