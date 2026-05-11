@@ -1,7 +1,7 @@
 #requires -version 5.1
 
 $ErrorActionPreference = "Stop"
-$DebugEnabled = $true
+$DebugEnabled = $false
 
 function Write-DebugLog {
     param([string]$Message)
@@ -9,6 +9,13 @@ function Write-DebugLog {
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         Write-Host "[DEBUG $timestamp] $Message" -ForegroundColor DarkGray
     }
+}
+
+function Update-ProcessPath {
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$machinePath;$userPath"
+    Write-DebugLog "Process PATH refreshed from registry."
 }
 
 function Test-Admin {
@@ -42,13 +49,28 @@ if ($gitInstalled) {
 } else {
     if (-not (Test-Command "winget")) {
         Write-DebugLog "winget not found. Exiting."
-        Write-Warning "winget nao esta disponivel. Instale o Git manualmente ou instale o App Installer."
+        Write-Warning "winget nao esta disponivel. Instale o Git manualmente atraves deste link https://git-scm.com/download/win ou instale o App Installer."
         exit 1
     }
 
     Write-Host "Instalando o Git via winget..." -ForegroundColor Yellow
     winget install --id Git.Git -e --source winget
     Write-DebugLog "winget install finished; exitCode=$LASTEXITCODE; success=$?"
+
+    Update-ProcessPath
+
+    $gitCmdPath = @(
+        "C:\Program Files\Git\cmd\git.exe",
+        "C:\Program Files (x86)\Git\cmd\git.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+    if ($gitCmdPath) {
+        $gitCmdDir = Split-Path $gitCmdPath -Parent
+        if ($env:Path -notlike "*$gitCmdDir*") {
+            $env:Path = "$env:Path;$gitCmdDir"
+            Write-DebugLog "Added Git cmd dir to process PATH: $gitCmdDir"
+        }
+    }
 
     if (-not (Test-Command "git")) {
         Write-DebugLog "Git still not found after install. Exiting."

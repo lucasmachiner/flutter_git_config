@@ -22,15 +22,16 @@ Este projeto fornece um unico script PowerShell para instalar e configurar o Git
 ## Como executar
 
 1. Abra o PowerShell como Administrador
-2. Nesta pasta, permita scripts se necessario:
+2. Va ate a pasta onde o arquivo `setup-dev-env.ps1` esta salvo (a mesma onde voce fez o download ou criou o arquivo). A execucao precisa ser nessa pasta, mesmo que o nome da pasta seja igual ao do repositorio.
+3. Nesta pasta, permita scripts se necessario:
    ```powershell
    Set-ExecutionPolicy Unrestricted -Scope CurrentUser
    ```
-3. Execute o script:
+4. Execute o script:
    ```powershell
    .\setup-dev-env.ps1
    ```
-4. Reinicie o terminal e execute:
+5. Reinicie o terminal e execute:
    ```powershell
    flutter doctor
    ```
@@ -39,3 +40,4 @@ Este projeto fornece um unico script PowerShell para instalar e configurar o Git
 
 - Alterar o PATH do sistema requer privilegios de Administrador.
 - Se o Flutter ja estiver instalado em outro local, o script nao sobrescreve.
+- Se o winget nao estiver disponivel e o Git nao puder ser instalado automaticamente, baixe o instalador em https://git-scm.com/download/win e execute manualmente. Depois disso, rode o script novamente.
