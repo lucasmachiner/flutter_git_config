@@ -24,7 +24,7 @@ Este projeto fornece um unico script PowerShell para instalar e configurar o Git
 1. Abra o PowerShell como Administrador
 2. Nesta pasta, permita scripts se necessario:
    ```powershell
-   Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+   Set-ExecutionPolicy Unrestricted -Scope CurrentUser
    ```
 3. Execute o script:
    ```powershell
